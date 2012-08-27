@@ -1,0 +1,6 @@
+Installation instructions can be found in INSTALL
+
+You will need both the GSL and Minuit2 to compile this.
+This may not be the case on your installation, but I
+have found that Minuit2 often produces incorrect
+results unless you compile it with --disable-openmp.
