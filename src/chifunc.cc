@@ -51,9 +51,10 @@ void chifunc_base::print(std::ostream& os) const {
 /////////////////////////////////////////////////////////////////////
 chifunc::chifunc( const SNeData& data, 
 		  const std::map<unsigned int,double>& idisp, 
-		  double pz, utility::cosmo_fittype fit ) : 
+		  double pz, utility::cosmo_fittype fit,
+		  double equiv_widthpar_cutval) : 
   chifunc_base( data, idisp, pz, fit ), fixalphaset(false), fixbetaset(false),
-  errsfixed(false) { }
+  equiv_widthpar_cut( equiv_widthpar_cutval ), errsfixed(false) { }
 
 /*!
   Updates the inverse covariance matrix
@@ -316,9 +317,9 @@ double chifunc::GetRMS(const std::vector<double>& par) const {
   if (isprepped != true ) throw CosFitterExcept("GetRMS","GetRMS",
 						"Not prepped",1);
 
-  double w, wa, om, ode, alpha, beta, scriptm;
+  double w, wa, om, ode, alpha, beta, scriptm1, scriptm2;
   utility::parse_param_values( par, fittype, om, ode, w, wa, alpha, beta,
-			       scriptm );
+			       scriptm1, scriptm2 );
 
   int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
   if (st != 0) return 1e20; //Failure
@@ -327,7 +328,9 @@ double chifunc::GetRMS(const std::vector<double>& par) const {
   rms = 0.0;
   for (unsigned int i = 0; i < nsn; ++i) {
     diffmag = sne[i].mag - (dl[i] - alpha * (sne[i].widthpar-1.0) +
-			    + beta * sne[i].colourpar + scriptm);
+			    + beta * sne[i].colourpar);
+    if ( sne[i].equiv_widthpar <= equiv_widthpar_cut )
+      diffmag -= scriptm1; else diffmag -= scriptm2;
     rms += diffmag * diffmag;
   }
 
@@ -347,7 +350,8 @@ double chifunc::GetRMS(const std::vector<double>& par) const {
   This handles only the case where the SN are uncorrelated
 */
 double chifunc::GetDiagonalChisq(double om, double ode, double w, double wa,
-				 double alpha, double beta, double scriptm) 
+				 double alpha, double beta, double scriptm1,
+				 double scriptm2) 
   const {
 
   double diffmag, chisq = 0.0;
@@ -355,7 +359,9 @@ double chifunc::GetDiagonalChisq(double om, double ode, double w, double wa,
     //Errors completely pre-calculated
     for (unsigned int i = 0; i < nsn; ++i) {
       diffmag = sne[i].mag - (dl[i] - alpha * (sne[i].widthpar-1.0) +
-			      + beta * sne[i].colourpar + scriptm);
+			      + beta * sne[i].colourpar);
+      if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	diffmag -= scriptm1; else diffmag -= scriptm2;
       chisq += diffmag*diffmag/pre_vars[i];
     }
   } else {
@@ -375,7 +381,9 @@ double chifunc::GetDiagonalChisq(double om, double ode, double w, double wa,
       //alpha included, beta+cross terms not in pre-vars
       for (unsigned int i = 0; i < nsn; ++i) {
 	diffmag = sne[i].mag - (dl[i] - alpha * (sne[i].widthpar-1.0) +
-				+ beta * sne[i].colourpar + scriptm);
+				+ beta * sne[i].colourpar);
+	if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	  diffmag -= scriptm1; else diffmag -= scriptm2;
 	invvar = 1.0 / ( pre_vars[i] 
 			 + betasq * sne[i].var_colourpar
 			 - 2.0 * betaval * sne[i].cov_mag_colourpar
@@ -386,7 +394,9 @@ double chifunc::GetDiagonalChisq(double om, double ode, double w, double wa,
       //Beta included, alpha+cross terms not
       for (unsigned int i = 0; i < nsn; ++i) {
 	diffmag = sne[i].mag - (dl[i] - alpha * (sne[i].widthpar-1.0) +
-				+ beta * sne[i].colourpar + scriptm);
+				+ beta * sne[i].colourpar);
+	if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	  diffmag -= scriptm1; else diffmag -= scriptm2;
 	invvar = 1.0 / ( pre_vars[i] 
 			 + alphasq * sne[i].var_widthpar
 			 + 2.0 * alphaval * sne[i].cov_mag_widthpar
@@ -398,7 +408,9 @@ double chifunc::GetDiagonalChisq(double om, double ode, double w, double wa,
       //Neither fixed, none of alpha/beta already in pre-vars
       for (unsigned int i = 0; i < nsn; ++i) {
 	diffmag = sne[i].mag - (dl[i] - alpha * (sne[i].widthpar-1.0) +
-				+ beta * sne[i].colourpar + scriptm);
+				+ beta * sne[i].colourpar);
+	if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	  diffmag -= scriptm1; else diffmag -= scriptm2;
 	invvar = 1.0 / ( pre_vars[i] 
 			 + alphasq * sne[i].var_widthpar
 			 + betasq * sne[i].var_colourpar
@@ -433,14 +445,18 @@ double chifunc::GetDiagonalChisq(double om, double ode, double w, double wa,
   This handles the case where the SN are correlated.
 */
 double chifunc::GetChisq(double om, double ode, double w, double wa,
-			 double alpha, double beta, double scriptm) const {
+			 double alpha, double beta, double scriptm1,
+			 double scriptm2) const {
 
   double chisq;
   static std::vector<double> diffmag(nsn);
 
-  for (unsigned int i = 0; i < nsn; ++i)
+  for (unsigned int i = 0; i < nsn; ++i) {
     diffmag[i] = sne[i].mag - (dl[i] - alpha * (sne[i].widthpar-1.0) +
-			       + beta * sne[i].colourpar + scriptm);
+			       + beta * sne[i].colourpar);
+    if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+      diffmag[i] -= scriptm1; else diffmag[i] -= scriptm2;
+  }
 
   if ( ! errsfixed ) {
     //If errsfixed, this was computed in CalcPreErrs
@@ -472,9 +488,9 @@ double chifunc::operator()(const std::vector<double>& par) const {
   if (isprepped != true ) throw CosFitterExcept("chifunc","operator()",
 						"Not prepped",1);
 
-  double w, wa, om, ode, alpha, beta, scriptm;
+  double w, wa, om, ode, alpha, beta, scriptm1, scriptm2;
   utility::parse_param_values( par, fittype, om, ode, w, wa, alpha, beta,
-			       scriptm );
+			       scriptm1, scriptm2 );
 
   int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
   if (st != 0) return 1e20; //Failure
@@ -492,9 +508,9 @@ double chifunc::operator()(const std::vector<double>& par) const {
 
   double chisq;
   if (sne.areErrorsDiagonal()) 
-    chisq = GetDiagonalChisq(om,ode,w,wa,alpha,beta,scriptm); 
+    chisq = GetDiagonalChisq(om,ode,w,wa,alpha,beta,scriptm1,scriptm2); 
   else 
-    chisq = GetChisq(om,ode,w,wa,alpha,beta,scriptm);
+    chisq = GetChisq(om,ode,w,wa,alpha,beta,scriptm1,scriptm2);
   
   if ( (includebao && includewmap) && (!useEisenstein) ) {
     //Altogether
@@ -523,9 +539,9 @@ double chifunc::operator()(const std::vector<double>& par) const {
 
 void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
 
-  double w, wa, om, ode, alpha, beta, scriptm;
+  double w, wa, om, ode, alpha, beta, scriptm1, scriptm2;
   utility::parse_param_values( par, fittype, om, ode, w, wa, alpha, beta,
-			       scriptm );
+			       scriptm1, scriptm2 );
 
   int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
   if (st != 0) {
@@ -551,7 +567,9 @@ void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
       //Errors completely pre-calculated
       corrmag = sne[i].mag + alpha*(sne[i].widthpar-1.0)
 	- beta*sne[i].colourpar;
-      diffmag = corrmag - dl[i] - scriptm;
+      diffmag = corrmag - dl[i];
+      if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	diffmag -= scriptm1; else diffmag -= scriptm2;
       err = pre_vars[i];
     } else {
       //Here we are updating the errors on every step
@@ -569,7 +587,9 @@ void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
 	//alpha included, beta+cross terms not in pre-vars
 	corrmag = sne[i].mag + alpha*(sne[i].widthpar-1.0)
 	  - beta*sne[i].colourpar;
-	diffmag = corrmag - dl[i] - scriptm;
+	diffmag = corrmag - dl[i];
+	if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	  diffmag -= scriptm1; else diffmag -= scriptm2;
 	err = sqrt( pre_vars[i] 
 		    + betasq * sne[i].var_colourpar
 		    - 2.0 * betaval * sne[i].cov_mag_colourpar
@@ -578,7 +598,9 @@ void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
 	//Beta included, alpha+cross terms not
 	corrmag = sne[i].mag + alpha*(sne[i].widthpar-1.0)
 	  - beta*sne[i].colourpar;
-	diffmag = corrmag - dl[i] - scriptm;
+	diffmag = corrmag - dl[i];
+	if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	  diffmag -= scriptm1; else diffmag -= scriptm2;
 	err = sqrt( pre_vars[i] 
 		    + alphasq * sne[i].var_widthpar
 		    + 2.0 * alphaval * sne[i].cov_mag_widthpar
@@ -587,7 +609,9 @@ void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
 	//Neither fixed, none of alpha/beta already in pre-vars
 	corrmag = sne[i].mag + alpha*(sne[i].widthpar-1.0)
 	  - beta*sne[i].colourpar;
-	diffmag = corrmag - dl[i] - scriptm;
+	diffmag = corrmag - dl[i];
+	if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+	  diffmag -= scriptm1; else diffmag -= scriptm2;
 	err = sqrt( pre_vars[i] 
 		    + alphasq * sne[i].var_widthpar
 		    + betasq * sne[i].var_colourpar
@@ -597,11 +621,14 @@ void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
       }
     }
     
+    double dli = dl[i];
+    if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+      dli += scriptm1; else dli += scriptm2;
     os << std::left << std::setw(8) << sne[i].name << std::fixed << std::right
        << "  " << std::setprecision(4) << std::setw(6) << sne[i].zcmb
        << "  " << std::setprecision(4) << std::setw(7) << sne[i].mag
        << "  " << std::setprecision(4) << std::setw(8) << corrmag
-       << "  " << std::setprecision(4) << std::setw(7) << dl[i]+scriptm
+       << "  " << std::setprecision(4) << std::setw(7) << dli
        << "  " << std::setprecision(4) << std::setw(7) << diffmag
        << "  " << std::setprecision(4) << std::setw(7) << err
        << std::endl;
@@ -609,262 +636,3 @@ void chifunc::print(std::ostream& os, const std::vector<double>& par) const {
 }
 
 
-////////////////////////////////////////////////////////////////////////
-//                      chifunc_multilin                              //
-////////////////////////////////////////////////////////////////////////
-chifunc_multilin::chifunc_multilin( const SNeData& data, 
-				    const std::map<unsigned int,double>& idisp, 
-				    double pz, utility::cosmo_fittype fit ) : 
-  chifunc_base( data, idisp, pz, fit ), widthcut(0.8), colourcut(1.0) {} 
-
-void chifunc_multilin::CalcPreErrs( ) {
-
-  bool fixedintrinsic; //!< True if there is only one value for all SNe
-  unsigned int nintrinsicdisp;
-
-  double currintrinsicsq;
-  nintrinsicdisp = intrinsicdisp.size();
-  if ( nintrinsicdisp == 0) {
-    //Nothing, this is bad
-    throw CosFitterExcept("chifunc","CalcPreErrs","No intrinsic disp set",1);
-  } else if ( nintrinsicdisp == 1 ) {
-    //Use the same for all even if it doesn't match the data set number
-    fixedintrinsic = true;
-    std::map<unsigned int,double>::const_iterator it = intrinsicdisp.begin();
-    currintrinsicsq = (it->second)*(it->second);
-  } else {
-    fixedintrinsic = false;
-    currintrinsicsq = 0.0;
-  }
-
-  isprepped = false;
-  pre_vars.resize( nsn );
-  const double zfacsq = (5.0/log(10.0))*(5.0/log(10.0));
-  double dzerrsq, emptyfac;
-  if (fixedintrinsic) {
-    for (unsigned int i = 0; i < nsn; ++i) {
-      emptyfac = (1.0+sne[i].zcmb)/(sne[i].zcmb*(1+0.5*sne[i].zcmb));
-      dzerrsq = pecz*pecz + sne[i].var_z;
-      dzerrsq *= zfacsq*emptyfac*emptyfac;
-      pre_vars[i] = sne[i].var_mag + dzerrsq + currintrinsicsq;
-    }
-  } else {
-    std::map< unsigned int, double >::const_iterator it;
-    for (unsigned int i = 0; i < nsn; ++i) {
-      it = intrinsicdisp.find( sne[i].dataset );
-      if (it == intrinsicdisp.end()) {
-	std::stringstream errstr;
-	errstr << "Unknown dataset number " << sne[i].dataset;
-	errstr << " for sn: " << sne[i].name;
-	throw CosFitterExcept("chifunc","calcPreErrs",
-			      errstr.str(),2);
-      }
-      currintrinsicsq = it->second * it->second;
-      emptyfac = (1.0+sne[i].zcmb)/(sne[i].zcmb*(1+0.5*sne[i].zcmb));
-      dzerrsq = pecz*pecz + sne[i].var_z;
-      dzerrsq *= zfacsq*emptyfac*emptyfac;
-      pre_vars[i] = sne[i].var_mag + dzerrsq + currintrinsicsq;
-    }
-  }
-
-  isprepped = true;
-}
-
-double chifunc_multilin::EstimateScriptm( const std::vector<double>& par ) 
-  const {
-  if (isprepped != true ) throw CosFitterExcept("chifunc_multilin",
-						"EstimateScriptm",
-						"Not prepped",1);
-  double w, wa, om, ode, alpha1, alpha2, beta1, beta2;
-  utility::parse_param_values_multi_nosm( par, fittype, om, ode, w, wa, alpha1,
-					  alpha2, beta1, beta2 );
-
-  int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
-  if (st != 0) return 1e20; //Failure
-
-  double dmag, scriptm, totweight;
-  scriptm = 0.0;
-  totweight = 0.0;
-
-  double invvar, alphaval, betaval, alphabetaval;
-  double widthconst, colourconst, alphasq, betasq;
-
-  widthconst = (alpha1 - alpha2)*(widthcut - 1);
-  colourconst = (beta1 - beta2)*colourcut;
-
-  for (unsigned int i = 0; i < nsn; ++i) {
-    if ( sne[i].widthpar < widthcut ) alphaval = alpha1; else
-      alphaval = alpha2;
-    if ( sne[i].colourpar < colourcut ) betaval = beta1; else
-      betaval = beta2;
-    alphabetaval = alphaval * betaval;
-    alphasq = alphaval*alphaval;
-    betasq = betaval*betaval;
-    invvar = 1.0 / (pre_vars[i] 
-		    + alphasq * sne[i].var_widthpar
-		    + betasq * sne[i].var_colourpar
-		    + 2 * alphaval * sne[i].cov_mag_widthpar
-		    - 2 * betaval * sne[i].cov_mag_colourpar
-		    - 2 * alphabetaval * sne[i].cov_widthpar_colourpar ); 
-    dmag = sne[i].mag - (dl[i] - alphaval*(sne[i].widthpar-1.0)
-			 + betaval * sne[i].colourpar );
-    if (sne[i].widthpar >= widthcut ) dmag += widthconst;
-    if (sne[i].colourpar >= colourcut ) dmag += colourconst;
-    scriptm += dmag * invvar;
-    totweight += invvar;
-  }
-
-  return scriptm/totweight;
-}
-
-
-/*!
-  \param[in] par Cosmological and nuisance parameters.  Not all
-    may be present, but the order should be \f$\Omega_m , \Omega_{DE},
-    w , \alpha_1 , \alpha_2, \beta_1, \beta_2\f$.
-  \returns The \f$\chi^2\f$
-*/
-double chifunc_multilin::GetRMS(const std::vector<double>& par) const {
-  if (isprepped != true ) throw CosFitterExcept("GetRMS","GetRMS",
-						"Not prepped",1);
-
-  double w, wa, om, ode, alpha1, alpha2, beta1, beta2, scriptm;
-  utility::parse_param_values_multi( par, fittype, om, ode, w, wa, alpha1, 
-				     alpha2, beta1, beta2, scriptm );
-
-  int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
-  if (st != 0) return 1e20; //Failure
-
-  double widthconst, colourconst;
-  widthconst = (alpha1 - alpha2)*(widthcut - 1);
-  colourconst = (beta1 - beta2)*colourcut;
-
-  double diffmag, rms;
-  rms = 0.0;
-  for (unsigned int i = 0; i < nsn; ++i) {
-    diffmag = sne[i].mag - dl[i] - scriptm;
-    if (sne[i].widthpar < widthcut) 
-      diffmag += alpha1*(sne[i].widthpar-1.0); else 
-      diffmag += alpha2*(sne[i].widthpar-1.0) + widthconst;
-    if (sne[i].colourpar < colourcut) 
-      diffmag -= beta1*sne[i].colourpar; else
-      diffmag -= beta2*sne[i].colourpar + colourconst;
-    rms += diffmag * diffmag;
-  }
-  return sqrt( rms / static_cast<double>(nsn) );
-}
-
-/*!
-  \param[in] om \f$\Omega_m
-  \param[in] ode \f$\Omega_{DE}\f$
-  \param[in] w   \f$w\f$
-  \param[in] wa  \f$w_a\f$
-  \param[in] alpha \f$\alpha\f$
-  \param[in] beta \f$\beta\f$
-  \param[in] scriptm \f$\mathcal{M}\f$
-  \returns The \f$\chi^2\f$ of the SN fit
-
-*/
-double chifunc_multilin::GetChisq(double om, double ode, double w, double wa,
-				  double alpha1, double alpha2, 
-				  double beta1, double beta2, double scriptm) 
-  const {
-
-  double diffmag, chisq = 0.0;
-
-  //Here we are updating the errors on every step
-  double alphaval, betaval, alphabetaval, alphasq, betasq, invvar;
-  double widthconst, colourconst;
-
-  widthconst = (alpha1 - alpha2)*(widthcut - 1);
-  colourconst = (beta1 - beta2)*colourcut;
-
-  for (unsigned int i = 0; i < nsn; ++i) {
-    diffmag = sne[i].mag - dl[i] - scriptm;
-    if (sne[i].widthpar < widthcut) 
-      diffmag += alpha1*(sne[i].widthpar-1.0); else 
-      diffmag += alpha2*(sne[i].widthpar-1.0) + widthconst;
-    if (sne[i].colourpar < colourcut) 
-      diffmag -= beta1*sne[i].colourpar; else
-      diffmag -= beta2*sne[i].colourpar + colourconst;
-    
-    if ( sne[i].widthpar < widthcut ) alphaval = alpha1; else
-      alphaval = alpha2;
-    if ( sne[i].colourpar < colourcut ) betaval = beta1; else
-      betaval = beta2;
-
-    alphabetaval = alphaval * betaval;
-    alphasq = alphaval * alphaval;
-    betasq = betaval * betaval;
-    
-    invvar = 1.0 / ( pre_vars[i] 
-		     + alphasq * sne[i].var_widthpar
-		     + betasq * sne[i].var_colourpar
-		     + 2.0 * alphaval * sne[i].cov_mag_widthpar
-		     - 2.0 * betaval * sne[i].cov_mag_colourpar
-		     - 2.0 * alphabetaval * sne[i].cov_widthpar_colourpar);
-    
-    chisq += diffmag*diffmag * invvar;
-  }
-  return chisq;
-}
-
-/*!
-  \param[in] par Cosmological and nuisance parameters.  Not all
-    may be present, but the order should be \f$\Omega_m , \Omega_{DE},
-    w , \alpha_1 , \alpha_2 , \beta_1 , \beta_2 \f$.
-  \returns The \f$\chi^2\f$
-*/
-double chifunc_multilin::operator()(const std::vector<double>& par) const {
-  if (isprepped != true ) throw CosFitterExcept("chifunc_multilin",
-						"operator()",
-						"Not prepped",1);
-
-  double w, wa, om, ode, alpha1, alpha2, beta1, beta2, scriptm;
-  utility::parse_param_values_multi( par, fittype, om, ode, w, wa, alpha1, 
-				     alpha2, beta1, beta2, scriptm );
-  int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
-  if (st != 0) return 1e20; //Failure
-
-  if (std::isnan(alpha1) || std::isnan(alpha2)) {
-    std::cerr << "Warning -- non finite alpha.  Results probably unreliable"
-	      << std::endl;
-    return 1e20;
-  }
-  if (std::isnan(beta1) || std::isnan(beta2) ) {
-    std::cerr << "Warning -- non finite beta.  Results probably unreliable"
-	      << std::endl;
-    return 1e20;
-  }
-
-  double chisq;
-  chisq = GetChisq(om,ode,w,wa,alpha1,alpha2,beta1,beta2,scriptm);
-
-
-  if ( (includebao && includewmap) && (!useEisenstein) ) {
-    //Altogether
-    WMAP7_P09.setFittype(fittype);
-    chisq += WMAP7_P09( om, ode, w, wa );
-  } else {
-    if (includebao) {
-      if (useEisenstein) {
-	E05.setFittype(fittype);
-	chisq += E05( om, ode, w, wa );
-      } else {
-	P09.setFittype(fittype);
-	chisq += P09( om, ode, w, wa );
-      }
-    }
-    if (includewmap) {
-	WMAP7.setFittype(fittype);
-	chisq += WMAP7( om, ode, w, wa );
-    }
-  }
-
-  return chisq;
-}
-
-void chifunc_multilin::print(std::ostream& os, 
-			     const std::vector<double>& par) const {
-  os << "Extended output not supported for chifunc_multilin" << std::endl;
-}

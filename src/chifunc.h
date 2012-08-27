@@ -72,8 +72,8 @@ class chifunc_base : public FCNBase {
   void SetAtrans(double val); //!< Set \f$a_t\f$ for Komatsu form of w(a)
 
   void SetIncludeBAO(bool set) { includebao=set; } //!< Controls if BAO constraint included
-  void SetIncludeWMAP(bool set) { includewmap=set; } //!< Controls if WMAP 7th year constraint is used
-  void SetUseEisenstein(bool set) { useEisenstein=set; } //!< Controls if Eisensein '05 is used instead of Percival '09 for BAO
+  void SetIncludeWMAP(bool set) { includewmap=set; } //!< Controls if WMAP 3rd year constraint is used
+ void SetUseEisenstein(bool set) { useEisenstein=set; } //!< Controls if Eisensein '05 is used instead of Percival '09 for BAO
 
   virtual void print(std::ostream&) const; //!< Prints a summary of the data
   virtual void print(std::ostream& os, const std::vector<double>& par) const = 0; //!< More extedned printing function
@@ -96,61 +96,36 @@ protected:
   bool fixbetaset;   //!< Is \f$\beta\f$ fixed for error propagation
   double fixalphaval; //!< Value of fixed \f$\alpha\f$
   double fixbetaval; //!< Value of fixed \f$\beta\f$
+  double equiv_widthpar_cut; //!< Cut in equivalent width paramter
 
   bool errsfixed;  //!< Are errors fixed?
 
   void computeInvCovMatrix(float,float) const; //!< Get inverse covariance matrix
-  double GetChisq(double,double,double,double,double,double,double) const; //!< Non-diagonal case
-  double GetDiagonalChisq(double,double,double,double,double,double,double) const; //!< Diagonal case
+  double GetChisq(double,double,double,double,double,double,
+		  double,double) const; //!< Non-diagonal case
+  double GetDiagonalChisq(double,double,double,double,double,double,
+			  double,double) const; //!< Diagonal case
 
 public:
   
   chifunc( const SNeData& data, const std::map<unsigned int,double>& idisp, 
-	   double pz=0.001,utility::cosmo_fittype fit=utility::omegam_omegade); 
+	   double pz=0.001,utility::cosmo_fittype fit=utility::omegam_omegade,
+	   double equiv_widthpar_cutval = 0.0); 
   void SetAlphaErrFix( double ); //!< Set \f$\alpha\f$ to fixed value for propagation
   void SetBetaErrFix( double ); //!< Set \f$\beta\f$ to fixed value for propagation
+  double getEquivWidthParCutval() const { return equiv_widthpar_cut; }
+  void setEquivWidthParCutval(double val) { equiv_widthpar_cut=val; }
 
   void CalcPreErrs();  //!< Precalculate as many error quantities as possible
 
   double GetRMS(const std::vector<double>&) const; //!< Returns RMS around the fit
 
   void print(std::ostream& os, const std::vector<double>& par) const; //!< More extedned printing function
+  void printResids(std::ostream&, const std::vector<double>&) const;
 
   double operator()(const std::vector<double>&) const; //!< Returns \f$\chi^2\f$. 
   double EstimateScriptm(const std::vector<double>&) const; //!< Estimates \f${\mathcal M}\f$
 
 };
-
-/*!
-  \brief A version of chifunc that supports broken-linear alpha and beta
-  relations, but not covariance matricies.
-*/
-class chifunc_multilin : public chifunc_base {
- protected:
-  double widthcut; //!< Break point in alpha correction
-  double colourcut; //!< Break point in colour correction
-  double GetChisq(double,double,double,double,double,double, double, 
-		  double,double) const; //!< Gets \f$\chi^2\f$
-public:
-  
-  chifunc_multilin( const SNeData& data, const std::map<unsigned int,double>& idisp, 
-		    double pz=0.001,utility::cosmo_fittype fit=utility::omegam_omegade); 
-
-  double GetWidthCut() const { return widthcut; } //!< Returns widthcut
-  double GetColourCut() const { return colourcut; } //!< Returns widthcut
-  void SetWidthCut(double val) { widthcut=val; isprepped=false;} //!< Sets widthcut
-  void SetColourCut(double val) { colourcut=val; isprepped=false;} //!< Sets colourcut
-
-  void CalcPreErrs();  //!< Precalculate as many error quantities as possible
-
-  double GetRMS(const std::vector<double>&) const; //!< Returns RMS around the fit
-
-  double operator()(const std::vector<double>&) const; //!< Returns \f$\chi^2\f$. 
-  double EstimateScriptm(const std::vector<double>&) const; //!< Estimates \f${\mathcal M}\f$
-  
-  void print(std::ostream& os, const std::vector<double>& par) const; //!< More extedned printing function
-
-};
-
 
 #endif

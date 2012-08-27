@@ -16,19 +16,11 @@ namespace utility {
 
   void parse_param_values( const std::vector<double>&, utility::cosmo_fittype,
 			   double&, double&, double&,
-			   double&, double&, double&, double&); 
+			   double&, double&, double&, double&, double&); 
   void parse_param_values_nosm( const std::vector<double>&, 
 				utility::cosmo_fittype,
 				double&, double&, double&,
 				double&, double&, double& ); 
-
-  void parse_param_values_multi( const std::vector<double>&, utility::cosmo_fittype,
-				 double&, double&, double&, double&, double&,
-				 double&, double&, double&, double&); 
-  void parse_param_values_multi_nosm( const std::vector<double>&, 
-				      utility::cosmo_fittype,
-				      double&, double&, double&, double&,
-				      double&, double&, double&, double& ); 
 
   void stringwords(const std::string& ins, std::vector<std::string>& words); //!< Breaks up an input string into a vector
 

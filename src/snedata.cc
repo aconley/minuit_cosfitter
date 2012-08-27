@@ -19,10 +19,13 @@ using namespace std;
 
   \param[in] alpha Width (stretch) correction coefficient
   \param[in] beta Colour correction coefficient
+  \param[in] gamma Equivalent width correction coefficient
   \returns Corrected mangitude value
 */
-float SNeDataEntry::getCorrectedMag(float alpha, float beta) const {
-  return static_cast<float>(mag + alpha * (widthpar - 1.0) - beta * colourpar);
+float SNeDataEntry::getCorrectedMag(float alpha, float beta, 
+				    float gamma) const {
+  return static_cast<float>(mag + alpha * (widthpar - 1.0) - 
+			    beta * colourpar + gamma * equiv_widthpar);
 }
 
 /*!
@@ -31,14 +34,16 @@ float SNeDataEntry::getCorrectedMag(float alpha, float beta) const {
 
   \param[in] alpha Width (stretch) correction coefficient
   \param[in] beta Colour correction coefficient
+  \param[in] gamma Equivalent width correction coefficient
   \returns Error in corrected magnitude, not including peculiar velocity
     or intrinsic dispersion
 */
-float SNeDataEntry::getCorrectedMagError(float alpha, 
-                                         float beta) const {
+float SNeDataEntry::getCorrectedMagError(float alpha, float beta,
+                                         float gamma) const {
   float var = var_mag 
     + (alpha*alpha*var_widthpar) 
-    + (beta*beta*var_colourpar) 
+    + (beta*beta*var_colourpar)
+    + (gamma*gamma*var_equiv_widthpar)
     + (2.0*alpha*cov_mag_widthpar) 
     - (2.0*beta*cov_mag_colourpar) 
     - (2.0*alpha*beta*cov_widthpar_colourpar);
@@ -51,13 +56,15 @@ float SNeDataEntry::getCorrectedMagError(float alpha,
 
   \param[in] alpha Width (stretch) correction coefficient
   \param[in] beta Colour correction coefficient
+  \param[in] gamma Equivalent width correction coefficient
   \returns Variance corrected magnitude, not including peculiar velocity
     or intrinsic dispersion
 */
-float SNeDataEntry::getCorrectedMagVar(float alpha, 
-                                       float beta) const {
+float SNeDataEntry::getCorrectedMagVar(float alpha, float beta,
+                                       float gamma) const {
   return var_mag + alpha*alpha*var_widthpar + 
-    beta*beta*var_colourpar + 2*alpha*cov_mag_widthpar -
+    beta*beta*var_colourpar + gamma*gamma*equiv_widthpar + 
+    2*alpha*cov_mag_widthpar -
     2*beta*cov_mag_colourpar - 2*alpha*beta*cov_widthpar_colourpar;
 }
 
@@ -204,7 +211,7 @@ void SNeData::readData(const std::string& FileName, bool verbose) {
   std::stringstream str("");
   SNeDataEntry sndata;
 
-  float dz, dmag, dwidthpar, dcolourpar;
+  float dz, dmag, dwidthpar, dcolourpar, dequiv_widthpar;
   unsigned int wsize;
 
   points.resize(0);
@@ -215,9 +222,9 @@ void SNeData::readData(const std::string& FileName, bool verbose) {
     if (line[0]=='#' || line[0]==';') continue; //Comment line
     utility::stringwords(line,words);
     wsize = words.size();
-    if (wsize < 13) continue; //Not enough entries on line
+    if (wsize < 15) continue; //Not enough entries on line
     
-   if (wsize > 14) {
+   if (wsize > 16) {
       std::stringstream errstrng("");
       errstrng << "Too many entries on line: " << line;
       throw CosFitterExcept("SNeData","readData",
@@ -236,24 +243,26 @@ void SNeData::readData(const std::string& FileName, bool verbose) {
     str.str(words[7]); str.clear(); str >> dwidthpar;
     str.str(words[8]); str.clear(); str >> sndata.colourpar;
     str.str(words[9]); str.clear(); str >> dcolourpar;
-    str.str(words[10]); str.clear(); str >> sndata.cov_mag_widthpar;
-    str.str(words[11]); str.clear(); str >> sndata.cov_mag_colourpar;
-    str.str(words[12]); str.clear(); str >> sndata.cov_widthpar_colourpar;
+    str.str(words[10]); str.clear(); str >> sndata.equiv_widthpar;
+    str.str(words[11]); str.clear(); str >> dequiv_widthpar;
+    str.str(words[12]); str.clear(); str >> sndata.cov_mag_widthpar;
+    str.str(words[13]); str.clear(); str >> sndata.cov_mag_colourpar;
+    str.str(words[14]); str.clear(); str >> sndata.cov_widthpar_colourpar;
 
-    if (wsize == 14) {
-      str.str(words[13]); str.clear(); str >> sndata.dataset;
+    if (wsize == 16) {
+      str.str(words[15]); str.clear(); str >> sndata.dataset;
     }
 
     sndata.var_z = dz*dz;
     sndata.var_mag = dmag*dmag;
     sndata.var_widthpar = dwidthpar*dwidthpar;
     sndata.var_colourpar = dcolourpar*dcolourpar;
-
+    sndata.var_equiv_widthpar = dequiv_widthpar * dequiv_widthpar;
     points.push_back(sndata);
   }
   
   if (points.size() == 0) throw CosFitterExcept("SNeData","readData",
-						"No data read",8);
+						"No data read",4);
 
   if (verbose) cout << "Read: " << points.size() << " lines from " << 
 		 FileName << endl;
@@ -281,7 +290,6 @@ void SNeData::readData(const std::string& FileName, bool verbose) {
   if (!isCovValid())
     throw CosFitterExcept("SNeData","readData",
 			  "Found invalid correlation coefficient",16);
-
 
 }
 

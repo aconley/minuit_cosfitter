@@ -32,6 +32,8 @@ struct SNeDataEntry {
   float var_mag; //!< Variance of magnitude
   float colourpar; //!< Colour related parameter ( E(B-V), A_V, etc. )
   float var_colourpar; //!< Variance of colourpar
+  float equiv_widthpar; //!< Equivalent width parameter
+  float var_equiv_widthpar; //!< Variance of equiv width parameter
   float cov_mag_widthpar; //!< Covariance between magnitude and widthpar
   float cov_mag_colourpar; //!< Covariance between magnitude and colourpar
   float cov_widthpar_colourpar; //!< Covariance between widthpar and colourpar
@@ -41,11 +43,13 @@ struct SNeDataEntry {
   SNeDataEntry(std::string SNNAME="",float ZCMB=0,float ZHEL=0,float VARZ=0,
 	       float WIDTHPAR=0, float VARWIDTHPAR=0,float MAG=0,
 	       float VARMAG=0, float COLOURPAR=0, float VARCOLOURPAR=0, 
+	       float EQUIV_WIDTHPAR=0, float VAREQUIV_WIDTHPAR=0, 
 	       float COV_MAG_WIDTHPAR=0, float COV_MAG_COLOURPAR=0, 
 	       float COV_WIDTHPAR_COLOURPAR=0, unsigned int DATASET=0) :
-    name(SNNAME),zcmb(ZCMB),zhel(ZHEL),var_z(VARZ),widthpar(WIDTHPAR),
-    var_widthpar(VARWIDTHPAR),mag(MAG),var_mag(VARMAG),colourpar(COLOURPAR),
-    var_colourpar(VARCOLOURPAR),cov_mag_widthpar(COV_MAG_WIDTHPAR),
+  name(SNNAME),zcmb(ZCMB),zhel(ZHEL),var_z(VARZ),widthpar(WIDTHPAR),
+    var_widthpar(VARWIDTHPAR), mag(MAG),var_mag(VARMAG), colourpar(COLOURPAR),
+    var_colourpar(VARCOLOURPAR),equiv_widthpar(EQUIV_WIDTHPAR),
+    var_equiv_widthpar(VAREQUIV_WIDTHPAR), cov_mag_widthpar(COV_MAG_WIDTHPAR),
     cov_mag_colourpar(COV_MAG_COLOURPAR),
     cov_widthpar_colourpar(COV_WIDTHPAR_COLOURPAR),
     dataset(DATASET)
@@ -58,6 +62,8 @@ struct SNeDataEntry {
     var_widthpar = inval.var_widthpar; mag = inval.mag;
     var_mag = inval.var_mag; colourpar = inval.colourpar; 
     var_colourpar = inval.var_colourpar; 
+    equiv_widthpar = inval.equiv_widthpar;
+    var_equiv_widthpar = inval.var_equiv_widthpar;
     cov_mag_widthpar = inval.cov_mag_widthpar;
     cov_mag_colourpar = inval.cov_mag_colourpar;
     cov_widthpar_colourpar = inval.cov_widthpar_colourpar;
@@ -65,13 +71,13 @@ struct SNeDataEntry {
   }
 
   /*! \brief Returns corrected magnitude */
-  float getCorrectedMag(float,float) const;
+  float getCorrectedMag(float,float,float) const;
 
   /*! \brief Returns error on corrected magnitude */
-  float getCorrectedMagError(float,float) const;
+  float getCorrectedMagError(float,float,float) const;
 
   /*! \brief Returns variance of corrected magnitude */
-  float getCorrectedMagVar(float,float) const;
+  float getCorrectedMagVar(float,float,float) const;
 
   unsigned int getDataSet() const { return dataset; } //!< Returns dataset number
 
@@ -85,6 +91,8 @@ struct SNeDataEntry {
     var_widthpar = inval.var_widthpar; mag = inval.mag;
     var_mag = inval.var_mag; colourpar = inval.colourpar; 
     var_colourpar = inval.var_colourpar; 
+    equiv_widthpar = inval.equiv_widthpar;
+    var_equiv_widthpar = inval.var_equiv_widthpar;
     cov_mag_widthpar = inval.cov_mag_widthpar;
     cov_mag_colourpar = inval.cov_mag_colourpar;
     cov_widthpar_colourpar = inval.cov_widthpar_colourpar;

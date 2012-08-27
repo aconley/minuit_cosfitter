@@ -27,8 +27,7 @@ using namespace ROOT::Minuit2;
 
 int main(int argc, char **argv) {
 
-  bool multilin, fixalphaerrset, fixbetaerrset, fixalpha, fixbeta;
-  bool verbose, ultraverbose;
+  bool fixalphaerrset, fixbetaerrset, fixalpha, fixbeta, verbose;
   bool flatfit, wfit, wafit, includebao, includewmap, docontours;
   bool have_mag_cov, have_width_cov, have_colour_cov;
   bool have_magwidth_cov, have_magcolour_cov, have_widthcolour_cov;
@@ -37,17 +36,16 @@ int main(int argc, char **argv) {
   std::string magwidth_cov_file, magcolour_cov_file, widthcolour_cov_file;
   std::string datafile;
   double pecz, alpha, beta, fixalphaerrval, fixbetaerrval;
-  double widthcut, colourcut;
+  double equiv_width_cut;
   double atrans, om, ode, w0, wa;
   bool fixom, fixode, fixw0, fixwa;
   std::map<unsigned int,double> intrinsicdisp;
   int ncontours;
 
   //Defaults
-  multilin = false;
   docontours = false;
   fixalpha = fixbeta = false;
-  verbose = ultraverbose = false;
+  verbose = false;
   fixalphaerrset = false; alpha = fixalphaerrval = 1.5;
   fixbetaerrset = false; beta = fixbetaerrval = 2.3;
   have_mag_cov=false;have_width_cov=false;have_colour_cov=false;
@@ -62,14 +60,13 @@ int main(int argc, char **argv) {
   includewmap = false;
   pecz = 0.001;
   intrinsicdisp[0] = 0.17;
-  widthcut = 0.8;
-  colourcut = 0.3;
   om = 0.25;
   ode = 0.75;
   w0 = -1.0;
   wa = 0.0;
   fixom = fixode = fixw0 = fixwa = false;
   ncontours = 40;
+  equiv_width_cut = 0.0;
 
   int c;
   int option_index = 0;
@@ -79,14 +76,13 @@ int main(int argc, char **argv) {
     {"wfit",no_argument,0,'w'},
     {"wafit",no_argument,0,'5'},
     {"usekomatsu",no_argument,0,'k'},
-    {"ultraverbose",no_argument,0,'u'},
     {"verbose",no_argument,0,'v'},
     {"intrinsicdisp",required_argument,0,'i'},
-    {"multilin",required_argument,0,'m'},
     {"fixalphaerr",required_argument,0,'1'},
     {"fixbetaerr",required_argument,0,'2'},
     {"includebao",no_argument,0,'3'},
     {"includewmap",no_argument,0,'4'},
+    {"useeisenstein",no_argument,0,'E'},
     {"alpha",required_argument,0,'a'},
     {"beta",required_argument,0,'b'},
     {"omega_m",required_argument,0,'&'},
@@ -96,33 +92,30 @@ int main(int argc, char **argv) {
     {"ncontours",required_argument,0,'n'},
     {"pecz",required_argument,0,'p'},
     {"atrans",required_argument,0,'6'},
-    {"useeisenstein",no_argument,0,'E'},
+    {"equiv_widthcut",required_argument,0,'e'},
     {"magcov",required_argument,0,'!'},
     {"widthcov",required_argument,0,'@'},
     {"colourcov",required_argument,0,'#'},
     {"magwidthcov",required_argument,0,'$'},
     {"magcolourcov",required_argument,0,'%'},
     {"widthcolourcov",required_argument,0,'^'},
-    {"widthcut",required_argument,0,'W'},
-    {"colourcut",required_argument,0,'C'},
     {"help", no_argument, 0, 'h'},
     {0,0,0,0}
   };
 
   while ( ( c = getopt_long(argc,argv,
-			    "hcEfmwuv345ki:1:2:a:b:p:6:!:@:#:$:%:^:&:*:(:):n:W:C:",
+			    "hcEfwv345ki:1:2:a:b:e:p:6:!:@:#:$:%:^:&:*:(:):n:",
 			    long_options, &option_index ) ) != -1 ) 
     switch(c) {
     case 'h' :
       std::cerr << "NAME" << std::endl;
-      std::cerr << "\tcosfitter -- Performs a Minuit cosmology fit." <<
-	std::endl;
+      std::cerr << "\tcosfitter-twoscriptm -- Performs a Minuit cosmology fit."
+		<< std::endl;
       std::cerr << "SYNOPSIS" << std::endl;
-      std::cerr << "\tcosfitter [ -i | --intrinsicdisp=DATASET IDISP ] " 
+      std::cerr << "\tcosfitter-twoscriptm [ -i | --intrinsicdisp=DATASET IDISP ] " 
 		<< std::endl;
-      std::cerr << "\t [ --multilin ] [ --widthcut WIDTHCUT ] [ --colourcut COLOURCUT ]" << std::endl;
-      std::cerr << "\t [ --omega_m OMEGA_M ] [ --omega_de OMEGA_DE ]" 
-		<< std::endl;
+      std::cerr << "\t [ -e, --equivwidthcut ] [ --omega_m OMEGA_M ] "
+		<< "[ --omega_de OMEGA_DE ]" << std::endl;
       std::cerr << "\t [ --w0 w0 ] [ --wa WA ] [ -f, --flat ]"
 		" [ -a, --alpha ALPHA ]" << std::endl;
       std::cerr << "\t [ -b, --beta BETA ] [ -w, --wfit ] [ --wafit ] "
@@ -130,7 +123,6 @@ int main(int argc, char **argv) {
       std::cerr << "\t [ -k, --usekomatsu ] [ --atrans=ATRANS ]" << std::endl;
       std::cerr << "\t [ --includebao ] [ --includewmap ] "
 		<< "[ -E, --useeisenstein ]" << std::endl;
-
       std::cerr << "\t [ -p, --pecz PECZ ] [ --fixalphaerr FIXAL ] "
 		<< "[ --fixbetaerr FIXBETA ]" << std::endl;
       std::cerr << "\t [ --magcov=MAGCOVFILE ] [ --widthcov=WIDTHCOVFILE ]"
@@ -139,8 +131,7 @@ int main(int argc, char **argv) {
 		<< " [ --magwidthcov=MAGWIDTHCOVFILE ]" << std::endl;
       std::cerr << "\t [ --magcolourcov=MAGCOLOURCOVFILE ]" << std::endl;
       std::cerr << "\t [ --widthcolourcov=WIDTHCOLOURCOVFILE ]" 
-		<< std::endl;
-      std::cerr << "\t [ -v, --verbose ] [ -u, --ultraverbose ]" << std::endl;
+		<< " [ -v, --verbose ]" << std::endl;
       std::cerr << "\t [ -c, --contours ] [ -n, --ncontours NCONTOURS ]"
 		<< " datafile" << std::endl;
       std::cerr << "DESCRIPTION" << std::endl;
@@ -168,16 +159,12 @@ int main(int argc, char **argv) {
 		<< "default " << std::endl;
       std::cerr << "\t\tis 0 0.17 (i.e., dataset 0 has 0.17 mag dispersion)" 
 		<< std::endl;
-      std::cerr << "\t-m, --multilin" << std::endl;
-      std::cerr << "\t\tDo multilinear fit for alpha and beta" << std::endl;
-      std::cerr << "\t--widthcut" << std::endl;
-      std::cerr << "\t\tIn a multilinear fit, where the break is in the alpha"
+      std::cerr << "\t-e, --equiv_widthcut EQUIV_WIDTHCUT" << std::endl;
+      std::cerr << "\t\tCut on equivalent width parameter.  Values below this"
 		<< std::endl;
-      std::cerr << "\t\tfit.  Default: 0.8" << std::endl;
-      std::cerr << "\t--colourcut" << std::endl;
-      std::cerr << "\t\tIn a multilinear fit, where the break is in the beta"
-		<< std::endl;
-      std::cerr << "\t\tfit.  Default: 0.3" << std::endl;
+      std::cerr << "\t\tare matched to scriptm1, values above this to"
+		<< " scriptm2." << std::endl;
+      std::cerr << "\t\t(def: 0.0)" << std::endl;
       std::cerr << "\t--omega_m OMEGA_M" << std::endl;
       std::cerr << "\t\tDon't fit for omega_m, but fix it at this value."
 		<< std::endl;
@@ -223,8 +210,6 @@ int main(int argc, char **argv) {
       std::cerr << "\t-E, --useeisenstein" << std::endl;
       std::cerr << "\t\tUse the Eisenstein '05 BAO constraints instead of"
 		<< " Percival 09." << std::endl;
-      std::cerr << "\t\tHas no effect if --includebao isn't set."
-		<< std::endl;
       std::cerr << "\t-c, --contours" << std::endl;
       std::cerr << "\t\tDraw (with primitive text graphics) contours." 
 		<< std::endl;
@@ -232,31 +217,8 @@ int main(int argc, char **argv) {
       std::cerr << "\t\tNumber of contours points to make (def: 40)."
 		<< std::endl;
       std::cerr << "\t-v, --verbose" << std::endl;
-      std::cerr << "\t\tActivate verbose mode, printing parameter covariances" 
-		<< std::endl;
-      std::cerr << "\t\tat end." << std::endl;
-      std::cerr << "\t-u, --ultraverbose" << std::endl;
-      std::cerr << "\t\tActivate ultraverbose mode, printing parameter covariances" 
-		<< std::endl;
-      std::cerr << "\t\tand SN residuals at end." << std::endl;
-      std::cerr << "NOTES" << std::endl;
-      std::cerr <<"\tIn multilinear fits there is no way to do a multilinear"
-		<< std::endl;
-      std::cerr <<"\tfit in only one of alpha or beta.  Also, setting the width"
-		<< std::endl;
-      std::cerr <<"\tor colour cut to values that don't include any SN will cause"
-		<< std::endl;
-      std::cerr << "\tthe fit to fail." << std::endl;
+      std::cerr << "\t\tActivate verbose mode." << std::endl;
       return 0;
-      break;
-    case 'm' :
-      multilin = true;
-      break;
-    case 'C' :
-      colourcut = atof(optarg);
-      break;
-    case 'W' :
-      widthcut = atof(optarg);
       break;
     case 'a' :
       alpha = atof(optarg);
@@ -271,6 +233,9 @@ int main(int argc, char **argv) {
       break;
     case 'n' :
       ncontours = atoi(optarg);
+      break;
+    case 'e' :
+      equiv_width_cut = atof(optarg);
       break;
     case '1' :
       fixalphaerrset = true;
@@ -363,38 +328,19 @@ int main(int argc, char **argv) {
     case 'v' :
       verbose = true;
       break;
-    case 'u' :
-      verbose = ultraverbose = true;
-      break;
     }
 
   if ( optind == argc ) {
     std::cerr << "Required argument datafile not provided" << std::endl;
     return 1;
   }
-
-  datafile = std::string( argv[optind] );
-
-  if (multilin) {
-    if (fixalphaerrset || fixbetaerrset) {
-      std::cout << "Error: multilinear fit prevents fixing of alpha or beta"
-		<< std::endl;
-      return 16;
-    }
-    if ( have_mag_cov || have_width_cov || have_colour_cov ||
-	 have_magwidth_cov || have_magcolour_cov ||
-	 have_widthcolour_cov ) {
-      std::cout << "Error: multilinear fit doesn't support covariance"
-		<< " matricies" << std::endl;
-      return 16;
-    }
-  }
-
   if (useEisenstein && (!includebao)) {
     std::cout << "Warning: You are trying to use Eisenstein '05 but haven't"
 	      << " set --includebao" << std::endl;
     std::cout << "BAO constraints will not be included" << std::endl;
   }
+
+  datafile = std::string( argv[optind] );
 
   if (verbose) {
     std::cout << "Running fit to datafile: " << datafile 
@@ -418,7 +364,6 @@ int main(int argc, char **argv) {
     if (have_magcolour_cov) sne.readMagColourCovData( magcolour_cov_file );
     if (have_widthcolour_cov) 
       sne.readWidthColourCovData( widthcolour_cov_file );
-
     sne.zcmbsort();
 
   } catch (const CosFitterExcept& ex) {
@@ -452,36 +397,25 @@ int main(int argc, char **argv) {
   }
   */
   
-  chifunc_base* fFCN = 0;
-  if (multilin) {
-    fFCN = new chifunc_multilin(sne, intrinsicdisp, pecz, ft );
-    chifunc_multilin* ftmp = static_cast<chifunc_multilin*>(fFCN);
-    ftmp->SetWidthCut(widthcut);
-    ftmp->SetColourCut(colourcut);
-  } else {
-    fFCN = new chifunc(sne, intrinsicdisp, pecz, ft );
-    if (fixalphaerrset || fixbetaerrset) {
-      chifunc* ftmp = static_cast<chifunc*>(fFCN);
-      if (fixalphaerrset) ftmp->SetAlphaErrFix( fixalphaerrval );
-      if (fixbetaerrset) ftmp->SetBetaErrFix( fixbetaerrval );
-    }
-  }
+  chifunc fFCN( sne, intrinsicdisp, pecz, ft, equiv_width_cut );
+  if (fixalphaerrset) fFCN.SetAlphaErrFix( fixalphaerrval );
+  if (fixbetaerrset) fFCN.SetBetaErrFix( fixbetaerrval );
   if (useKomatsuForm) {
-    fFCN->SetUseKomatsuForm();
-    fFCN->SetAtrans( atrans );
+    fFCN.SetUseKomatsuForm();
+    fFCN.SetAtrans( atrans );
   }
-  if (includebao) fFCN->SetIncludeBAO( true );
-  if (includebao && useEisenstein) fFCN->SetUseEisenstein( true );
-  if (includewmap) fFCN->SetIncludeWMAP( true );
+  if (includebao) fFCN.SetIncludeBAO( true );
+  if (includebao && useEisenstein) fFCN.SetUseEisenstein( true );
+  if (includewmap) fFCN.SetIncludeWMAP( true );
 
+  
   //Initialize the errors 
   try {
-    fFCN->CalcPreErrs();
+    fFCN.CalcPreErrs();
   } catch (const CosFitterExcept& ex) {
     std::cerr << "Error performing fit" << std::endl;
     std::cerr << ex << std::endl;
     std::cerr << "Aborting" << std::endl;
-    delete fFCN;
     return 2;
   }
   
@@ -509,32 +443,22 @@ int main(int argc, char **argv) {
     upar.Add("w_a",wa,wa_err);
     if (fixwa) upar.Fix("w_a");
   }
-  if (multilin) {
-    upar.Add("\\alpha_1",alpha,alpha_err);
-    upar.Add("\\alpha_2",alpha,alpha_err);
-    upar.Add("\\beta_1",beta,beta_err);
-    upar.Add("\\beta_2",beta,beta_err);
-    if (fixalpha) upar.Fix("\\alpha_1");
-    if (fixbeta) upar.Fix("\\beta_1");
-    if (fixalpha) upar.Fix("\\alpha_2");
-    if (fixbeta) upar.Fix("\\beta_2");
-  } else {
-    upar.Add("\\alpha",alpha,alpha_err);
-    upar.Add("\\beta",beta,beta_err);
-    if (fixalpha) upar.Fix("\\alpha");
-    if (fixbeta) upar.Fix("\\beta");
-  }  
-  scriptm = fFCN->EstimateScriptm( upar.Params() );
-  upar.Add("\\scriptM",scriptm,scriptm_err);    
+  upar.Add("\\alpha",alpha,alpha_err);
+  upar.Add("\\beta",beta,beta_err);
+  if (fixalpha) upar.Fix("\\alpha");
+  if (fixbeta) upar.Fix("\\beta");
+  scriptm = fFCN.EstimateScriptm( upar.Params() );
+  upar.Add("\\scriptM_1",scriptm,scriptm_err);    
+  upar.Add("\\scriptM_2",scriptm,scriptm_err);    
   
   //Create the minimizer
   MnMachinePrecision mprec;
   mprec.SetPrecision(1e-5);
-  MnMigrad migrad( *fFCN, upar);
+  MnMigrad migrad( fFCN, upar);
   
   int nparams = upar.Parameters().size();
   
-  //Figure free params
+ //Figure free params
   std::vector< std::string > free_params;
   unsigned int nfree = 0;
   for (int i = 0; i < nparams; ++i)
@@ -542,9 +466,9 @@ int main(int argc, char **argv) {
       free_params.push_back( upar.Name(i) );
   nfree = free_params.size();
 
+
   //And minimize
   std::cout << "Starting minimization" << std::endl;
-
   try {
     FunctionMinimum min = migrad();
     std::cout << "Chi2 " << std::left << std::fixed <<
@@ -552,10 +476,10 @@ int main(int argc, char **argv) {
       sne.size() - nfree << " dof" << std::endl;
     std::cout << "RMS: " << std::left << std::fixed 
 	      << std::setprecision(3) 
-	      << fFCN->GetRMS( min.UserState().Params() ) 
+	      << fFCN.GetRMS( min.UserState().Params() ) 
 	      << " mag" << std::endl;
-    if (ultraverbose) fFCN->print( std::cout, min.UserState().Params() );
     if (verbose) {
+      fFCN.print( std::cout, min.UserState().Params() );
       if ( (includebao && includewmap) && (!useEisenstein) ) {
 	auxconstraint::wmap7_bao_P09 aux(ft);
 	std::cout << "Percival09+WMAP7 chi2 contribution: " 
@@ -597,7 +521,6 @@ int main(int argc, char **argv) {
       std::cout << "Function value: " << min.Fval() << std::endl;
       std::cout << "EDM: " << min.Edm() << std::endl;
       std::cout << "Number of calls: " << min.NFcn() << std::endl;
-      delete fFCN;
       if (min.HasMadePosDefCovar() ) { 
 	std::cout << "      Covar was made pos def" 
 		  << std::endl;
@@ -609,9 +532,6 @@ int main(int argc, char **argv) {
 	std::endl;
       if (min.HasReachedCallLimit() ) std::cout << 
 	"      Reached call limit" << std::endl;
-      if (multilin) std::cout << "Perhaps your width or colour cut was "
-			      << " such that few SN were included?"
-			      << std::endl;
 
       //Print values anyways
       for (int i = 0; i < nparams; ++i) {
@@ -624,7 +544,7 @@ int main(int argc, char **argv) {
     }    
     
     //Get errors and print them
-    MnMinos minos( *fFCN, min );
+    MnMinos minos( fFCN, min );
     std::pair<double,double> e;
     for (int i = 0; i < nparams; ++i) {
       if ( ! min.UserState().Parameter(i).IsFixed() ) {
@@ -644,29 +564,13 @@ int main(int argc, char **argv) {
 		  << " (fixed)" << std::endl;
       }
     }
-    std::cout << "\\scriptM is equivalent to M = " <<
-      min.UserState().Value("\\scriptM") + 5 * log10(0.7) - 42.38410 <<
+    std::cout << "\\scriptM_1 is equivalent to M = " <<
+      min.UserState().Value("\\scriptM_1") + 5 * log10(0.7) - 42.38410 <<
+      " for H_0 = 70 km/sec/Mpc" << std::endl;
+    std::cout << "\\scriptM_2 is equivalent to M = " <<
+      min.UserState().Value("\\scriptM_2") + 5 * log10(0.7) - 42.38410 <<
       " for H_0 = 70 km/sec/Mpc" << std::endl;
     
-    if (multilin) {
-      chifunc_multilin* ftmp = static_cast<chifunc_multilin*>(fFCN);
-      unsigned int nhighs, nhighc;
-      nhighs = nhighc = 0;
-      double wcut = ftmp->GetWidthCut();
-      double ccut = ftmp->GetColourCut();
-      for (unsigned int i = 0; i < sne.size(); ++i) {
-	if (sne[i].widthpar >= wcut) ++nhighs;
-	if (sne[i].colourpar >= ccut) ++nhighc;
-      }
-      std::cout << "Number of SN with width above break point of "
-		<< std::right << std::setw(6) << std::fixed 
-		<< std::setprecision(4) << wcut << " : "
-		<< nhighs << std::endl;
-      std::cout << "Number of SN with colour above break point of "
-		<< std::right << std::setw(6) << std::fixed 
-		<< std::setprecision(4) << ccut << " : "
-		<< nhighc << std::endl;
-    }
 
     //Output covariances
     if (verbose) {
@@ -697,11 +601,10 @@ int main(int argc, char **argv) {
     if (docontours) {
       if (ncontours < 1) {
 	std::cerr << "Error: number of contour points invalid" << std::endl;
-	delete fFCN;
 	return 4;
       }
 
-      MnContours contours( *fFCN, min );
+      MnContours contours( fFCN, min );
       std::vector<std::pair<double,double> > conts = contours(0,1,ncontours);
       MnPlot plot;
       std::cout << "Contours for: " << upar.Name(0) << " vs " 
@@ -717,11 +620,45 @@ int main(int argc, char **argv) {
     std::cerr << " To datafile: " << datafile << std::endl;
     std::cerr << ex << std::endl;
     std::cerr << "Aborting" << std::endl;
-    delete fFCN;
     return 2;
   }
 
-  delete fFCN;
-
   return 0;
+}
+
+void chifunc::printResids(std::ostream& os,
+			  const std::vector<double>& par) const {
+  if (isprepped != true ) throw CosFitterExcept("printResids","printResids",
+                                                "Not prepped",1);
+  double w, wa, om, ode, alpha, beta, scriptm1, scriptm2;
+  utility::parse_param_values( par, fittype, om, ode, w, wa, alpha, beta,
+                               scriptm1, scriptm2 );
+
+  int st = lmdist.getLumDist( sne, dl, om, ode, w, wa );
+  if (st != 0) return; //Failure
+
+  os << "Summary of SN data:" << std::endl;
+  double predmag;
+  for (unsigned int i = 0; i < nsn; ++i) {
+    predmag = dl[i] - alpha * (sne[i].widthpar-1.0) +
+      + beta * sne[i].colourpar;
+    if (sne[i].equiv_widthpar <= equiv_widthpar_cut)
+      predmag += scriptm1; else predmag += scriptm2;
+    os << std::left << std::setw(8) << sne[i].name << " z: " << std::right <<
+       std::setw(6) << std::fixed << std::setprecision(4) << sne[i].zhel << 
+      " s: " << std::right << std::setw(5) << std::fixed << 
+      std::setprecision(3) << sne[i].widthpar << " c: " << 
+      std::fixed << std::setprecision(3) << std::right << 
+      std::setw(6) << sne[i].colourpar;
+    os << " eq: " << std::right << std::setw(5) << std::fixed << 
+      std::setprecision(3) << sne[i].equiv_widthpar;
+    os << " var: " << std::setw(6) << std::fixed <<
+      std::right << pre_vars[i] << " sigma: " << std::fixed << 
+      std::setw(5) << std::right << sqrt(pre_vars[i]);
+    os << " predmag: " << std::setw(6) << std::fixed
+       << std::right << predmag << " diffmag: " 
+       << std::setw(6) << std::fixed << std::right
+       << sne[i].mag - predmag;
+    os << std::endl;
+  }
 }
