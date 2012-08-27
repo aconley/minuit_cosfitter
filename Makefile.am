@@ -2,8 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS=src
 
-EXTRA_DIST = data/Astier_sne.dat data/knop03_extended_lowe.dat \
-	data/knop03_extended_lowe.dat data/Riess98_sne.dat Doxyfile
+EXTRA_DIST = data/snls3_sample.dat
 
 docs :
 	doxygen Doxyfile
